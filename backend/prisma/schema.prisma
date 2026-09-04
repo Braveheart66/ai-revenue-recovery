@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvoiceStatus {
+  PENDING
+  RECOVERED
+  FAILED
+  HALTED
+}
+
+enum AiStrategy {
+  SILENT_RETRY
+  WHATSAPP_NEGOTIATION
+  VOICE_CALL
+  ESCALATE_TO_HUMAN
+}
+
+enum ActionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id         String    @id @default(cuid())
+  name       String
+  phone      String    @unique
+  created_at DateTime  @default(now())
+
+  invoices   Invoice[]
+
+  @@map("users")
+}
+
+model Invoice {
+  id                 String          @id @default(cuid())
+  user_id            String
+  razorpay_order_id  String          @unique
+  amount_paise       Int
+  status             InvoiceStatus
+  created_at         DateTime        @default(now())
+  updated_at         DateTime        @updatedAt
+
+  user               User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  webhooks           PaymentWebhook[]
+  dunning_actions    DunningAction[]
+
+  @@map("invoices")
+}
+
+model PaymentWebhook {
+  id                String    @id @default(cuid())
+  invoice_id        String
+  raw_event_id      String
+  error_code        String
+  error_description String
+  received_at       DateTime  @default(now())
+
+  invoice           Invoice   @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("payment_webhooks")
+}
+
+model DunningAction {
+  id                  String       @id @default(cuid())
+  invoice_id          String
+  strategy_chosen     AiStrategy
+  ai_reasoning        String
+  new_payment_link_id String?
+  status              ActionStatus
+  executed_at         DateTime     @default(now())
+
+  invoice             Invoice      @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("dunning_actions")
+}
