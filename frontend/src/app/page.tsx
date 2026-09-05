@@ -459,15 +459,7 @@ function DashboardComponent() {
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" /> AI Action: {currentScenario.aiAction}
                   </p>
                   
-                  {/* Hinglish Preview Box */}
-                  <div className="mt-2.5 pt-2 border-t border-gray-800/60 font-mono text-[11px] opacity-90">
-                    <span className="text-gray-400 block text-[10px] uppercase tracking-wider mb-1">
-                      {currentScenario.category === "whatsapp" ? "Empathetic Hinglish WhatsApp Dispatch:" : "Autonomous Response:"}
-                    </span>
-                    <p className="italic bg-gray-950/70 p-2 rounded-lg border border-gray-800">
-                      "{currentScenario.hinglishPreview}"
-                    </p>
-                  </div>
+
                 </div>
               </div>
 
