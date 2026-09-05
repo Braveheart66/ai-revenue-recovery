@@ -11,9 +11,8 @@ import {
   ShieldAlert,
   Zap,
   CreditCard,
-  Send,
+  Phone,
   Sparkles,
-  ArrowRight,
 } from "lucide-react";
 
 interface MetricsData {
@@ -70,7 +69,8 @@ function DashboardComponent() {
 
   // Simulation State
   const [selectedErrorIndex, setSelectedErrorIndex] = useState(0);
-  const [amountPaise, setAmountPaise] = useState(50000); // 50000 paise = Rs 500
+  const [amountPaise, setAmountPaise] = useState(50000); // 50000 paise = ₹500
+  const [userPhone, setUserPhone] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [isInjecting, setIsInjecting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
@@ -114,6 +114,7 @@ function DashboardComponent() {
           error_code: selected.code,
           error_description: selected.description,
           amount_paise: Number(amountPaise) || 50000,
+          user_phone: userPhone.trim() || undefined,
         }),
       });
 
@@ -121,10 +122,11 @@ function DashboardComponent() {
 
       if (res.ok && data.success) {
         setActiveOrderId(data.order_id);
+        const contactDisplay = data.contact ? ` to ${data.contact}` : "";
         addToast(
           "success",
           "⚡ Failure Webhook Injected",
-          `Order ${data.order_id} generated. AI Router triggered autonomously.`
+          `Order ${data.order_id} generated${contactDisplay}. AI Router triggered autonomously.`
         );
         fetchMetrics();
       } else {
@@ -308,7 +310,7 @@ function DashboardComponent() {
                 <select
                   value={selectedErrorIndex}
                   onChange={(e) => setSelectedErrorIndex(Number(e.target.value))}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                  className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
                 >
                   {ERROR_OPTIONS.map((opt, i) => (
                     <option key={opt.code} value={i}>
@@ -318,6 +320,25 @@ function DashboardComponent() {
                 </select>
                 <p className="text-xs text-indigo-300/80 mt-1.5 italic">
                   💡 {ERROR_OPTIONS[selectedErrorIndex].hint}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+                  Customer Phone Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userPhone}
+                    onChange={(e) => setUserPhone(e.target.value)}
+                    placeholder="+919876543210 (Twilio Sandbox / WhatsApp)"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-200 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-600"
+                  />
+                  <Phone className="w-4 h-4 text-gray-500 absolute right-3.5 top-3" />
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Optional. If empty, defaults to mock test number <code>+919999999999</code>.
                 </p>
               </div>
 
