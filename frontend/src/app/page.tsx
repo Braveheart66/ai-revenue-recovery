@@ -142,7 +142,7 @@ function DashboardComponent() {
   // Simulation State
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState(0);
   const [amountPaise, setAmountPaise] = useState(50000); // 50000 paise = Rs 500
-  const [userPhone, setUserPhone] = useState("");
+  const [userPhone, setUserPhone] = useState("+919555268266");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [isInjecting, setIsInjecting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
@@ -478,7 +478,7 @@ function DashboardComponent() {
                   <Phone className="w-4 h-4 text-gray-500 absolute right-3.5 top-3" />
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Optional. If empty, defaults to mock test number <code>+919999999999</code>.
+                  Your registered Twilio sandbox WhatsApp number with country code (+91).
                 </p>
               </div>
 

@@ -30,30 +30,36 @@ function getFromWhatsappNumber(): string {
  * Automatically prepends +91 for 10-digit Indian numbers.
  */
 function normalizeToWhatsapp(phone: string): string {
-  if (!phone) return 'whatsapp:+919999999999';
+  if (!phone || phone.trim() === '') {
+    return 'whatsapp:+919555268266';
+  }
 
   let cleaned = phone.trim().replace(/^whatsapp:/i, '');
+  // Keep only digits
+  const digits = cleaned.replace(/\D/g, '');
 
-  // Remove non-digit characters except leading +
-  cleaned = cleaned.replace(/[^0-9+]/g, '');
+  // Case 1: Indian 10-digit number (e.g. 9555268266)
+  if (digits.length === 10) {
+    return 'whatsapp:+91' + digits;
+  }
 
-  if (cleaned.startsWith('+')) {
-    // If it starts with +9555268266 (missing Indian country code 91)
-    if (cleaned.length === 11 && cleaned.startsWith('+9') && !cleaned.startsWith('+91')) {
-      cleaned = '+91' + cleaned.slice(1);
-    }
-  } else {
-    // 10-digit Indian mobile number
-    if (cleaned.length === 10) {
-      cleaned = '+91' + cleaned;
-    } else if (cleaned.length === 12 && cleaned.startsWith('91')) {
-      cleaned = '+' + cleaned;
-    } else {
-      cleaned = '+' + cleaned;
+  // Case 2: Already includes 91 country code (12 digits, e.g. 919555268266)
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return 'whatsapp:+' + digits;
+  }
+
+  // Case 3: Accidental extra/fumbled digit starting with 9 (e.g. 95555268266 - 11 digits)
+  // If 11 digits starting with 9 (like someone typed +9 then 10 digits without the 1 of 91)
+  if (digits.length === 11 && digits.startsWith('9')) {
+    // If second digit is 1 (91 + 9 digits), it's 91... else it was +9 + 10 digits
+    if (digits[1] !== '1') {
+      // It was +9 followed by 10-digit number: replace leading 9 with 91
+      return 'whatsapp:+91' + digits.slice(1);
     }
   }
 
-  return `whatsapp:${cleaned}`;
+  // Default fallback: ensure leading plus
+  return 'whatsapp:+' + digits;
 }
 
 export interface WhatsAppRecoveryResult {
