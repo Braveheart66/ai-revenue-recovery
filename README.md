@@ -93,14 +93,14 @@ If you give an AI the power to contact your customers, you need strict stopping 
 - **Prisma Ledger Tracking**: Every single AI decision, retry dispatch, and API call is tracked, explainable, and recorded in PostgreSQL via Prisma.
 - **Hard Cap at 3 Attempts**: If a transaction fails repeatedly across multiple retries (e.g. 3 consecutive `gateway_timeout` network glitches or balance failures), the AI automatically halts the dunning sequence.
 - **Immediate Status Halt**: The invoice is marked with status `HALTED`, completely blocking further automated bot outreach to prevent regulatory non-compliance, bank fraud tripping, or customer harassment.
-- **Explainable Human Escalation**: Upon reaching the cap, an `ESCALATE_TO_HUMAN` action is appended to the immutable audit trail with full diagnostics, immediately assigning the account to **Pooja Sharma** (*Key Account Manager / Customer Success & Tier-2 Support*) with a 2-hour SLA for direct reconciliation and mandate reset.
+- **Explainable Human Escalation**: Upon reaching the cap, an `ESCALATE_TO_HUMAN` action is appended to the immutable audit trail with full diagnostics, immediately assigning the account to the **Merchant Support & Key Accounts Desk** with a 2-hour SLA for direct manual reconciliation and mandate renewal.
 
 ### 5. Human Escalation Desk
-Certain failure modes cannot—and should not—be handled by automated bots. The platform includes an interactive Escalation Desk that pairs accounts with specialized human officers:
-- **Pooja Sharma** *(Key Account Manager)*: Handles card expirations and mandate renewals for corporate and high-value accounts.
-- **Vikramaditya Rao** *(Senior Risk & Compliance Officer)*: Reviews suspicious transactions flagged by gateway risk engines.
-- **Ananya Verma** *(Senior Collections Specialist)*: Investigates accounts that reached the 3-attempt cap to arrange customized payment plans.
-- Operators can log resolution notes and mark tickets resolved, updating the ledger and setting the invoice to `RECOVERED`.
+Certain failure modes cannot—and should not—be handled by automated bots. The platform includes an interactive Human Escalation Desk that dynamically routes unrecoverable transactions to specialized operations roles:
+- **Key Account Manager (Enterprise Billing)**: Handles expired payment instruments, corporate mandate renewals, and high-value customer outreach.
+- **Risk & Compliance Desk**: Reviews suspicious transactions, AML/fraud blocks, and payment velocity anomalies flagged by gateway risk engines.
+- **Specialized Collections & Retention Support**: Investigates accounts where the automated 3-attempt retry cap has been reached, offering structured alternative payment arrangements.
+- Operations specialists can log resolution notes and mark tickets resolved, updating the ledger and setting the invoice status to `RECOVERED`.
 
 ---
 
@@ -191,7 +191,7 @@ npm run dev
    - In the scenario selector, choose **Card Expired (Expired payment instrument)**.
    - Click **🚨 Inject & Trigger Human Escalation**.
    - *Result*: The engine determines this instrument cannot be recovered automatically. The **Human Escalations** card increments.
-   - Click **Open Desk →** on the Human Escalations card to view the operational drawer, inspect **Pooja Sharma**'s assigned profile, review the protocol, and click **Mark Resolved** to complete the workflow.
+   - Click **Open Desk →** on the Human Escalations card to view the operational drawer, inspect the assigned operational department and role, review the protocol, and click **Mark Resolved** to complete the workflow.
 
 ---
 
