@@ -32,9 +32,43 @@ export interface WhatsAppRecoveryResult {
 }
 
 /**
+ * Generates natural, empathetic Hinglish messages tailored to specific failure contexts
+ */
+function buildHinglishMessage(failureReason: string, paymentLinkUrl: string): string {
+  const reasonLower = (failureReason || '').toLowerCase();
+
+  if (reasonLower.includes('insufficient') || reasonLower.includes('balance')) {
+    return `Namaste! 🙏 Lagta hai account me sufficient balance na hone ki wajah se aapka payment complete nahi ho paya. Koi baat nahi, aap kisi doosre account ya UPI se 1-click me yahan se pay kar sakte hain: ${paymentLinkUrl}`;
+  }
+
+  if (reasonLower.includes('otp') || reasonLower.includes('authentication') || reasonLower.includes('3d secure')) {
+    return `Namaste! 🙏 Bank OTP verify na hone ya 3D Secure issue ki wajah se transaction reject ho gaya. Fikar mat kijiye, bina OTP ke fast UPI ya card se yahan se complete karein: ${paymentLinkUrl}`;
+  }
+
+  if (reasonLower.includes('limit') || reasonLower.includes('exceeds')) {
+    return `Namaste! 🙏 Aapke card ki per-transaction limit reach ho gayi thi isliye payment ruka. Aap alternative UPI app (GPay / PhonePe / Paytm) se yahan turant complete kar sakte hain: ${paymentLinkUrl}`;
+  }
+
+  if (reasonLower.includes('mandate') || reasonLower.includes('autopay') || reasonLower.includes('recurring')) {
+    return `Namaste! 🙏 Aapka recurring auto-debit process nahi ho paya. Subscription ko uninterrupted rakhne ke liye yahan se securely apna payment clear karein: ${paymentLinkUrl}`;
+  }
+
+  if (reasonLower.includes('international') || reasonLower.includes('currency')) {
+    return `Namaste! 🙏 International payments card par disabled hone ki wajah se transaction decline hua. Aap Indian UPI ya local payment mode se yahan se complete kar sakte hain: ${paymentLinkUrl}`;
+  }
+
+  if (reasonLower.includes('upi') || reasonLower.includes('vpa') || reasonLower.includes('app')) {
+    return `Namaste! 🙏 UPI app timeout ya MPIN issue ki wajah se payment fail hua. Aap kisi bhi doosre UPI handle ya card se direct yahan se complete kar sakte hain: ${paymentLinkUrl}`;
+  }
+
+  // General empathetic fallback
+  return `Namaste! 🙏 Lagta hai technical reasons ki wajah se aapka payment complete nahi ho saka. Koi dikkat nahi, aap bina kisi pareshani ke yahan se payment complete kar sakte hain: ${paymentLinkUrl}`;
+}
+
+/**
  * Executes autonomous WhatsApp negotiation:
  * 1. Generates a dynamic Razorpay payment link tied to the failed invoice
- * 2. Formats an empathetic Hinglish WhatsApp message
+ * 2. Formats a context-specific empathetic Hinglish WhatsApp message
  * 3. Sends the message via Twilio WhatsApp API
  * 4. Reconciles the DunningAction audit record with 'SUCCESS' and the new payment link ID
  */
@@ -76,9 +110,8 @@ export async function executeWhatsAppRecovery(
     );
   }
 
-  // 2. Format empathetic Hinglish WhatsApp message
-  const formattedReason = failureReason || 'payment verification issue';
-  const whatsappMessage = `Hi! Looks like your recent payment failed due to ${formattedReason}. Koi baat nahi, you can complete it securely here: ${paymentLinkUrl}`;
+  // 2. Format empathetic contextual Hinglish WhatsApp message
+  const whatsappMessage = buildHinglishMessage(failureReason, paymentLinkUrl);
 
   // 3. Send message via Twilio WhatsApp API
   let messageSent = false;

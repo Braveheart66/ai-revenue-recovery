@@ -13,8 +13,6 @@ import {
   CreditCard,
   Phone,
   Sparkles,
-  UserCheck,
-  Flame,
 } from "lucide-react";
 
 interface MetricsData {
@@ -45,38 +43,111 @@ interface ToastMessage {
   description: string;
 }
 
-const ERROR_OPTIONS = [
+export interface FailureScenario {
+  label: string;
+  code: string;
+  desc: string;
+  category: "whatsapp" | "retry" | "escalation";
+  aiAction: string;
+  hinglishPreview: string;
+}
+
+const FAILURE_SCENARIOS: FailureScenario[] = [
   {
-    label: "Insufficient Balance (Triggers WhatsApp)",
-    code: "BAD_REQUEST_ERROR",
-    description: "Payment failed due to insufficient funds in customer bank account",
-    hint: "AI chooses WhatsApp negotiation with dynamic discount payment link.",
+    "label": "Insufficient Balance (Card maxed out)",
+    "code": "insufficient_balance",
+    "desc": "Payment failed due to insufficient balance in account.",
+    "category": "whatsapp",
+    "aiAction": "Dispatches WhatsApp negotiation offering instant 1-click UPI recovery.",
+    "hinglishPreview": "Namaste! 🙏 Lagta hai account me sufficient balance na hone ki wajah se payment ruk gaya. Yahan se 1-click UPI karein..."
   },
   {
-    label: "Gateway Timeout (Triggers Silent Retry)",
-    code: "GATEWAY_ERROR",
-    description: "Bank gateway timed out during OTP authorization step",
-    hint: "AI schedules automatic background silent retry with jitter.",
+    "label": "Gateway Timeout (Network transient)",
+    "code": "gateway_timeout",
+    "desc": "The payment gateway timed out during processing.",
+    "category": "retry",
+    "aiAction": "Enqueues automated background silent retry with exponential backoff.",
+    "hinglishPreview": "[Automated Background Silent Retry - Customer is not disturbed]"
   },
   {
-    label: "Card Expired (Triggers Direct Human Escalation)",
-    code: "CARD_EXPIRED_ERROR",
-    description: "Card validity expired or transaction unauthorized by issuer",
-    hint: "AI recognizes expired payment instrument. Bypasses bot retries and immediately dispatches Human Escalation Protocol.",
+    "label": "Bank Servers Down (Issuer offline)",
+    "code": "issuer_down",
+    "desc": "The issuing bank's servers are currently down for maintenance.",
+    "category": "retry",
+    "aiAction": "Schedules delayed retry queue until bank health metrics recover.",
+    "hinglishPreview": "[Automated Background Silent Retry - Bank Health Polling]"
   },
+  {
+    "label": "Wrong OTP / 3D Secure Failed",
+    "code": "authentication_failed",
+    "desc": "Customer entered the wrong OTP or 3D Secure failed.",
+    "category": "whatsapp",
+    "aiAction": "Offers fast alternative UPI / biometric recovery link.",
+    "hinglishPreview": "Namaste! 🙏 Bank OTP verify na hone ki wajah se transaction reject ho gaya. Bina OTP ke UPI se yahan karein..."
+  },
+  {
+    "label": "Card Limit Exceeded",
+    "code": "exceeds_limit",
+    "desc": "Transaction amount exceeds the card's per-transaction limit.",
+    "category": "whatsapp",
+    "aiAction": "Guides customer to complete via alternative UPI apps (GPay / PhonePe).",
+    "hinglishPreview": "Namaste! 🙏 Card per-transaction limit reach ho gayi thi. Aap alternative UPI se turant complete karein..."
+  },
+  {
+    "label": "UPI App Timeout / MPIN Cancelled",
+    "code": "upi_pin_cancelled",
+    "desc": "Customer cancelled UPI PIN screen or app intent expired.",
+    "category": "whatsapp",
+    "aiAction": "Sends instant reminder with direct UPI VPA payment link.",
+    "hinglishPreview": "Namaste! 🙏 UPI app timeout ya MPIN issue ki wajah se payment fail hua. Yahan se instant retry karein..."
+  },
+  {
+    "label": "Recurring Auto-Debit / Mandate Failed",
+    "code": "mandate_debit_failed",
+    "desc": "Subscription e-mandate execution failed at bank level.",
+    "category": "whatsapp",
+    "aiAction": "Ensures subscription continuity by requesting 1-click manual top-up.",
+    "hinglishPreview": "Namaste! 🙏 Subscription auto-debit process nahi ho paya. Uninterrupted service ke liye pay karein..."
+  },
+  {
+    "label": "International Card Disabled",
+    "code": "international_disabled",
+    "desc": "Card does not support international/cross-border transactions.",
+    "category": "whatsapp",
+    "aiAction": "Offers Indian domestic UPI / NetBanking settlement link.",
+    "hinglishPreview": "Namaste! 🙏 International payments card par disabled hain. Indian UPI se yahan pay karein..."
+  },
+  {
+    "label": "Card Expired (Expired payment instrument)",
+    "code": "card_expired",
+    "desc": "Card validity expired or transaction unauthorized by issuer.",
+    "category": "escalation",
+    "aiAction": "Identifies unrecoverable card. Halts retries and escalates to Merchant Desk.",
+    "hinglishPreview": "[Escalated to Human Account Manager for mandate renewal]"
+  },
+  {
+    "label": "Flagged by Risk Engine (Fraud)",
+    "code": "fraud_suspected",
+    "desc": "Transaction blocked by Razorpay risk/fraud engine.",
+    "category": "escalation",
+    "aiAction": "Freezes automated outreach. Escalates immediately to Compliance Officer.",
+    "hinglishPreview": "[Escalated to Compliance & Risk Officer]"
+  }
 ];
 
 function DashboardComponent() {
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
 
   // Simulation State
-  const [selectedErrorIndex, setSelectedErrorIndex] = useState(0);
-  const [amountPaise, setAmountPaise] = useState(50000); // 50000 paise = ₹500
+  const [selectedScenarioIndex, setSelectedScenarioIndex] = useState(0);
+  const [amountPaise, setAmountPaise] = useState(50000); // 50000 paise = Rs 500
   const [userPhone, setUserPhone] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [isInjecting, setIsInjecting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const currentScenario = FAILURE_SCENARIOS[selectedScenarioIndex];
 
   const addToast = (type: "success" | "error" | "info" | "warning", title: string, description: string) => {
     const id = Date.now() + Math.random();
@@ -106,15 +177,14 @@ function DashboardComponent() {
 
   const handleInjectFailure = async () => {
     setIsInjecting(true);
-    const selected = ERROR_OPTIONS[selectedErrorIndex];
 
     try {
       const res = await fetch("http://localhost:8080/api/simulate/failure", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          error_code: selected.code,
-          error_description: selected.description,
+          error_code: currentScenario.code,
+          error_description: currentScenario.desc,
           amount_paise: Number(amountPaise) || 50000,
           user_phone: userPhone.trim() || undefined,
         }),
@@ -125,18 +195,24 @@ function DashboardComponent() {
       if (res.ok && data.success) {
         setActiveOrderId(data.order_id);
         const contactDisplay = data.contact ? ` to ${data.contact}` : "";
-        
-        if (selected.code === "CARD_EXPIRED_ERROR") {
+
+        if (currentScenario.category === "escalation") {
           addToast(
             "warning",
             "🚨 ESCALATED TO HUMAN DESK",
-            `Card Expired detected. Bypassed auto-retry and escalated order ${data.order_id} to merchant operations.`
+            `${currentScenario.label} detected. Handoff to merchant operations for ${data.order_id}.`
+          );
+        } else if (currentScenario.category === "retry") {
+          addToast(
+            "info",
+            "🔄 SILENT RETRY QUEUED",
+            `Transient failure detected for ${data.order_id}. Scheduled automated background retry.`
           );
         } else {
           addToast(
             "success",
-            "⚡ Failure Webhook Injected",
-            `Order ${data.order_id} generated${contactDisplay}. AI Router triggered autonomously.`
+            "⚡ WHATSAPP AGENT DISPATCHED",
+            `Empathetic Hinglish recovery message dispatched${contactDisplay} with dynamic payment link.`
           );
         }
         fetchMetrics();
@@ -198,7 +274,7 @@ function DashboardComponent() {
 
   const strategyIcons: Record<string, any> = {
     SILENT_RETRY: <RefreshCw className="w-5 h-5 text-blue-400" />,
-    WHATSAPP_NEGOTIATION: <MessageCircle className="w-5 h-5 text-green-400" />,
+    WHATSAPP_NEGOTIATION: <MessageCircle className="w-5 h-5 text-emerald-400" />,
     VOICE_CALL: <Activity className="w-5 h-5 text-amber-400" />,
     ESCALATE_TO_HUMAN: <ShieldAlert className="w-5 h-5 text-rose-500 animate-pulse" />,
   };
@@ -231,14 +307,15 @@ function DashboardComponent() {
                 ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-100"
                 : toast.type === "warning"
                 ? "bg-rose-950/90 border-rose-500/60 text-rose-100 ring-2 ring-rose-500/40"
-                : toast.type === "error"
-                ? "bg-red-950/90 border-red-500/50 text-red-100"
-                : "bg-blue-950/90 border-blue-500/50 text-blue-100"
+                : toast.type === "info"
+                ? "bg-blue-950/90 border-blue-500/60 text-blue-100 ring-1 ring-blue-400/30"
+                : "bg-red-950/90 border-red-500/50 text-red-100"
             }`}
           >
             <p className="font-bold text-sm flex items-center gap-2">
               {toast.type === "success" && <CheckCircle className="w-4 h-4 text-emerald-400" />}
               {toast.type === "warning" && <ShieldAlert className="w-4 h-4 text-rose-400" />}
+              {toast.type === "info" && <RefreshCw className="w-4 h-4 text-blue-400" />}
               {toast.type === "error" && <AlertTriangle className="w-4 h-4 text-red-400" />}
               {toast.title}
             </p>
@@ -259,7 +336,7 @@ function DashboardComponent() {
             </span>
           </div>
           <p className="text-gray-400 mt-2 text-sm flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-500 animate-pulse" /> Live Telemetry, Autonomous Mediation & Human Escalation Desk
+            <Activity className="w-4 h-4 text-emerald-500 animate-pulse" /> Live Telemetry, Multi-Channel Remediation & Human Escalation Desk
           </p>
         </div>
         <div className="text-left md:text-right">
@@ -268,21 +345,21 @@ function DashboardComponent() {
         </div>
       </header>
 
-      {/* Top Metrics Cards - 4 Columns including Escalation Desk */}
+      {/* Top Metrics Cards - 4 Columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" suppressHydrationWarning>
         <div className="bg-gray-900/90 border border-gray-800 p-6 rounded-2xl shadow-lg backdrop-blur" suppressHydrationWarning>
           <h3 className="text-gray-400 text-sm font-medium mb-1">Revenue At Risk</h3>
           <p className="text-3xl font-bold text-red-400 font-mono tracking-tight">
             {formatINR(metrics.total_at_risk_paise)}
           </p>
-          <p className="text-xs text-gray-500 mt-2">Aggregated failed payment volume</p>
+          <p className="text-xs text-gray-500 mt-2">Aggregated failed volume</p>
         </div>
         <div className="bg-gray-900/90 border border-gray-800 p-6 rounded-2xl shadow-lg backdrop-blur" suppressHydrationWarning>
           <h3 className="text-gray-400 text-sm font-medium mb-1">Revenue Recovered</h3>
           <p className="text-3xl font-bold text-emerald-400 font-mono tracking-tight">
             {formatINR(metrics.total_recovered_paise)}
           </p>
-          <p className="text-xs text-gray-500 mt-2">Recovered via autonomous interventions</p>
+          <p className="text-xs text-gray-500 mt-2">Recovered via AI interventions</p>
         </div>
         <div className="bg-gray-900/90 border border-gray-800 p-6 rounded-2xl shadow-lg relative overflow-hidden backdrop-blur" suppressHydrationWarning>
           <h3 className="text-gray-400 text-sm font-medium mb-1">AI Recovery Rate</h3>
@@ -295,7 +372,7 @@ function DashboardComponent() {
           </div>
         </div>
 
-        {/* Dedicated Human Escalation Desk Card */}
+        {/* Human Escalation Desk Card */}
         <div className={`p-6 rounded-2xl shadow-lg relative overflow-hidden backdrop-blur border transition-all ${
           escalationCount > 0 
             ? "bg-rose-950/30 border-rose-500/40 ring-1 ring-rose-500/30" 
@@ -321,8 +398,8 @@ function DashboardComponent() {
       {/* Main Grid: Control Center + Intervention Stats + Audit Trail */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" suppressHydrationWarning>
         
-        {/* Left Col: Interactive Live Control Center (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-6" suppressHydrationWarning>
+        {/* Left Col: Interactive Live Control Center (5 Cols) */}
+        <div className="lg:col-span-5 flex flex-col gap-6" suppressHydrationWarning>
           <div className="bg-gradient-to-b from-gray-900 to-gray-950 border border-indigo-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden" suppressHydrationWarning>
             <div className="flex items-center justify-between border-b border-gray-800 pb-4 mb-5">
               <div className="flex items-center gap-2">
@@ -331,11 +408,11 @@ function DashboardComponent() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-white">Live Control Center</h2>
-                  <p className="text-xs text-gray-400">Inject Razorpay webhooks to demo</p>
+                  <p className="text-xs text-gray-400">10 Realistic Failure Scenarios & Hinglish Flows</p>
                 </div>
               </div>
               <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">
-                Simulator
+                10 Scenarios
               </span>
             </div>
 
@@ -343,38 +420,51 @@ function DashboardComponent() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
-                  Error Injection Type
+                  Failure Scenario Selector
                 </label>
                 <select
-                  value={selectedErrorIndex}
-                  onChange={(e) => setSelectedErrorIndex(Number(e.target.value))}
+                  value={selectedScenarioIndex}
+                  onChange={(e) => setSelectedScenarioIndex(Number(e.target.value))}
                   className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
                 >
-                  {ERROR_OPTIONS.map((opt, i) => (
-                    <option key={opt.code} value={i}>
-                      {opt.label}
+                  {FAILURE_SCENARIOS.map((scenario, index) => (
+                    <option key={scenario.code} value={index}>
+                      {scenario.label}
                     </option>
                   ))}
                 </select>
-                <div className={`mt-2 p-2.5 rounded-xl border text-xs leading-relaxed ${
-                  ERROR_OPTIONS[selectedErrorIndex].code === "CARD_EXPIRED_ERROR"
+
+                {/* Dynamic Scenario Insight Card */}
+                <div className={`mt-3 p-3.5 rounded-xl border text-xs leading-relaxed transition-all ${
+                  currentScenario.category === "escalation"
                     ? "bg-rose-950/40 border-rose-500/40 text-rose-200"
-                    : "bg-indigo-950/30 border-indigo-500/30 text-indigo-200"
+                    : currentScenario.category === "retry"
+                    ? "bg-blue-950/40 border-blue-500/40 text-blue-200"
+                    : "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
                 }`}>
-                  <p className="font-semibold flex items-center gap-1.5 mb-1">
-                    {ERROR_OPTIONS[selectedErrorIndex].code === "CARD_EXPIRED_ERROR" ? (
-                      <>
-                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                        <span>High-Priority Escalation Scenario</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Autonomous Recovery Scenario</span>
-                      </>
-                    )}
+                  <div className="flex items-center justify-between mb-1.5 font-bold uppercase tracking-wider text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      {currentScenario.category === "escalation" && <ShieldAlert className="w-4 h-4 text-rose-400" />}
+                      {currentScenario.category === "retry" && <RefreshCw className="w-4 h-4 text-blue-400" />}
+                      {currentScenario.category === "whatsapp" && <MessageCircle className="w-4 h-4 text-emerald-400" />}
+                      <span>{currentScenario.category.toUpperCase()} PIPELINE</span>
+                    </span>
+                    <span className="font-mono text-[10px] opacity-80">{currentScenario.code}</span>
+                  </div>
+                  <p className="text-gray-300 font-medium mb-2">{currentScenario.desc}</p>
+                  <p className="text-white font-semibold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" /> AI Action: {currentScenario.aiAction}
                   </p>
-                  {ERROR_OPTIONS[selectedErrorIndex].hint}
+                  
+                  {/* Hinglish Preview Box */}
+                  <div className="mt-2.5 pt-2 border-t border-gray-800/60 font-mono text-[11px] opacity-90">
+                    <span className="text-gray-400 block text-[10px] uppercase tracking-wider mb-1">
+                      {currentScenario.category === "whatsapp" ? "Empathetic Hinglish WhatsApp Dispatch:" : "Autonomous Response:"}
+                    </span>
+                    <p className="italic bg-gray-950/70 p-2 rounded-lg border border-gray-800">
+                      "{currentScenario.hinglishPreview}"
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -421,9 +511,11 @@ function DashboardComponent() {
                 onClick={handleInjectFailure}
                 disabled={isInjecting}
                 className={`w-full mt-2 font-semibold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-                  ERROR_OPTIONS[selectedErrorIndex].code === "CARD_EXPIRED_ERROR"
+                  currentScenario.category === "escalation"
                     ? "bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white"
-                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white"
+                    : currentScenario.category === "retry"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white"
+                    : "bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white"
                 }`}
               >
                 {isInjecting ? (
@@ -431,15 +523,20 @@ function DashboardComponent() {
                     <RefreshCw className="w-4 h-4 animate-spin text-white" />
                     <span>Processing Webhook & AI Diagnosis...</span>
                   </>
-                ) : ERROR_OPTIONS[selectedErrorIndex].code === "CARD_EXPIRED_ERROR" ? (
+                ) : currentScenario.category === "escalation" ? (
                   <>
                     <ShieldAlert className="w-4 h-4 text-white" />
-                    <span>🚨 Inject Card Expired & Trigger Escalation</span>
+                    <span>🚨 Inject & Trigger Human Escalation</span>
+                  </>
+                ) : currentScenario.category === "retry" ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 text-white" />
+                    <span>🔄 Inject & Trigger Silent Retry</span>
                   </>
                 ) : (
                   <>
                     <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                    <span>⚡ Inject Failure Webhook</span>
+                    <span>⚡ Inject & Send WhatsApp Message</span>
                   </>
                 )}
               </button>
@@ -469,7 +566,7 @@ function DashboardComponent() {
                     <span className="text-indigo-400 font-bold">{activeOrderId}</span>
                   </div>
                 ) : (
-                  <span className="text-gray-500 italic">Click "Inject Failure Webhook" above to generate a mock order.</span>
+                  <span className="text-gray-500 italic">Click inject above to generate a mock order and test the loop.</span>
                 )}
               </div>
             </div>
@@ -534,8 +631,8 @@ function DashboardComponent() {
           </div>
         </div>
 
-        {/* Right Col: AI Decision Audit Trail & Escalation Queue (8 Cols) */}
-        <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col" suppressHydrationWarning>
+        {/* Right Col: AI Decision Audit Trail & Escalation Queue (7 Cols) */}
+        <div className="lg:col-span-7 bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col" suppressHydrationWarning>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 mb-6 gap-3">
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -558,7 +655,7 @@ function DashboardComponent() {
             </div>
           </div>
 
-          <div className="space-y-4 max-h-[680px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-4 max-h-[850px] overflow-y-auto pr-2 custom-scrollbar">
             {metrics.recent_audit_trail.length === 0 ? (
               <div className="text-center py-16 text-gray-500 font-mono text-sm">
                 No recovery logs detected yet. Use the Control Center to inject your first test failure!
