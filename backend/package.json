@@ -9,6 +9,7 @@
     "dev": "nodemon --watch src --exec ts-node src/index.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.21.0",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
