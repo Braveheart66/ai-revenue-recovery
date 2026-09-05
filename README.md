@@ -88,11 +88,12 @@ Indian retail consumers respond significantly better to polite, conversational H
 - Delivers a secure Razorpay short URL (`https://rzp.io/rzp/...`) supporting UPI, NetBanking, and alternate cards.
 - Sent directly via the Twilio WhatsApp API with automatic E.164 phone normalization (`+91`).
 
-### 4. Compliance Stopping Rules & Guardrails
-To adhere to the RBI Fair Practices Code for recovery and prevent spamming customers:
-- Every invoice enforces a **hard maximum limit of 3 recovery attempts**.
-- If 3 attempts elapse without settlement, the engine changes the invoice status to `HALTED`.
-- The engine ceases automated communications and registers an `ESCALATE_TO_HUMAN` action in the audit trail.
+### 4. Bounded Stopping Rules & Rate-Limited Safety Guardrails
+If you give an AI the power to contact your customers, you need strict stopping rules. When transactions fail repeatedly, our engine enforces an inviolable hard cap:
+- **Prisma Ledger Tracking**: Every single AI decision, retry dispatch, and API call is tracked, explainable, and recorded in PostgreSQL via Prisma.
+- **Hard Cap at 3 Attempts**: If a transaction fails repeatedly across multiple retries (e.g. 3 consecutive `gateway_timeout` network glitches or balance failures), the AI automatically halts the dunning sequence.
+- **Immediate Status Halt**: The invoice is marked with status `HALTED`, completely blocking further automated bot outreach to prevent regulatory non-compliance, bank fraud tripping, or customer harassment.
+- **Explainable Human Escalation**: Upon reaching the cap, an `ESCALATE_TO_HUMAN` action is appended to the immutable audit trail with full diagnostics, immediately assigning the account to **Pooja Sharma** (*Key Account Manager / Customer Success & Tier-2 Support*) with a 2-hour SLA for direct reconciliation and mandate reset.
 
 ### 5. Human Escalation Desk
 Certain failure modes cannot—and should not—be handled by automated bots. The platform includes an interactive Escalation Desk that pairs accounts with specialized human officers:

@@ -50,7 +50,7 @@ export async function checkRecoveryAllowed(invoiceId: string): Promise<PolicyChe
       data: {
         invoice_id: invoiceId,
         strategy_chosen: AiStrategy.ESCALATE_TO_HUMAN,
-        ai_reasoning: 'Max retries (3) reached. Compliance policy requires manual escalation.',
+        ai_reasoning: `Hard stopping rule triggered: ${attemptsCount} failed recovery attempts exhausted. Automated dunning halted and bounded. Escalated to Human Support.`,
         status: 'SCHEDULED',
       },
     });

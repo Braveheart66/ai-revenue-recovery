@@ -148,6 +148,7 @@ function DashboardComponent() {
   const [isSettling, setIsSettling] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isEscalationModalOpen, setIsEscalationModalOpen] = useState(false);
+  const [retryAttemptCount, setRetryAttemptCount] = useState(0);
 
   const currentScenario = FAILURE_SCENARIOS[selectedScenarioIndex];
 
@@ -189,6 +190,7 @@ function DashboardComponent() {
           error_description: currentScenario.desc,
           amount_paise: Number(amountPaise) || 50000,
           user_phone: userPhone.trim() || undefined,
+          order_id: activeOrderId || undefined,
         }),
       });
 
@@ -196,9 +198,17 @@ function DashboardComponent() {
 
       if (res.ok && data.success) {
         setActiveOrderId(data.order_id);
+        const nextCount = retryAttemptCount + 1;
+        setRetryAttemptCount(nextCount);
         const contactDisplay = data.contact ? ` to ${data.contact}` : "";
 
-        if (currentScenario.category === "escalation") {
+        if (nextCount >= 3 && currentScenario.category === "retry") {
+          addToast(
+            "warning",
+            "🛡️ HARD CAP REACHED (3/3) -> ESCALATED",
+            `3 failed retries exhausted for ${data.order_id}. Hard stopping rule triggered: automated dunning bounded & escalated to Human Support.`
+          );
+        } else if (currentScenario.category === "escalation") {
           addToast(
             "warning",
             "🚨 ESCALATED TO HUMAN DESK",
@@ -207,8 +217,8 @@ function DashboardComponent() {
         } else if (currentScenario.category === "retry") {
           addToast(
             "info",
-            "🔄 SILENT RETRY QUEUED",
-            `Transient failure detected for ${data.order_id}. Scheduled automated background retry.`
+            `🔄 SILENT RETRY (${nextCount}/3) QUEUED`,
+            `Transient failure detected for ${data.order_id}. Attempt ${nextCount} of 3 before hard cap escalation.`
           );
         } else {
           addToast(
@@ -427,7 +437,11 @@ function DashboardComponent() {
                 </label>
                 <select
                   value={selectedScenarioIndex}
-                  onChange={(e) => setSelectedScenarioIndex(Number(e.target.value))}
+                  onChange={(e) => {
+                    setSelectedScenarioIndex(Number(e.target.value));
+                    setActiveOrderId(null);
+                    setRetryAttemptCount(0);
+                  }}
                   className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
                 >
                   {FAILURE_SCENARIOS.map((scenario, index) => (
@@ -537,7 +551,75 @@ function DashboardComponent() {
               </button>
             </div>
 
-            {/* Active Order Card */}
+            {/* Multi-Inject Hard Stopping Rule Demo Action */}
+              <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-3 text-xs">
+                <div>
+                  <p className="font-semibold text-indigo-200 flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                    Strict Stopping Rule Demo
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Hard cap at 3 attempts: After 3 failed actions, AI halts and escalates to human.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isInjecting}
+                  onClick={async () => {
+                    setIsInjecting(true);
+                    try {
+                      // Generate a dedicated order to test 3 timeouts in sequence
+                      const testOrderId = "order_hardcap_" + Date.now();
+                      setActiveOrderId(testOrderId);
+                      
+                      for (let i = 1; i <= 3; i++) {
+                        await fetch("http://localhost:8080/api/simulate/failure", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            error_code: "gateway_timeout",
+                            error_description: "The payment gateway timed out.",
+                            amount_paise: Number(amountPaise) || 50000,
+                            user_phone: userPhone.trim() || undefined,
+                            order_id: testOrderId,
+                          }),
+                        });
+                        setRetryAttemptCount(i);
+                        await new Promise((r) => setTimeout(r, 600));
+                      }
+                      
+                      // 4th webhook triggers the hard stopping rule
+                      await fetch("http://localhost:8080/api/simulate/failure", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          error_code: "gateway_timeout",
+                          error_description: "The payment gateway timed out.",
+                          amount_paise: Number(amountPaise) || 50000,
+                          user_phone: userPhone.trim() || undefined,
+                          order_id: testOrderId,
+                        }),
+                      });
+
+                      addToast(
+                        "warning",
+                        "🛡️ HARD STOPPING RULE TRIGGERED",
+                        `Target ${testOrderId}: 3 retries exhausted. AI automatically halted dunning & escalated to Human Support.`
+                      );
+                      await fetchMetrics();
+                    } catch (e: any) {
+                      addToast("error", "Demo Error", e.message);
+                    } finally {
+                      setIsInjecting(false);
+                    }
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-2 rounded-lg shrink-0 transition-colors cursor-pointer text-xs shadow"
+                >
+                  ⚡ Run 3x Timeout Test
+                </button>
+              </div>
+
+              {/* Active Order Card */}
             <div className="mt-6 pt-5 border-t border-gray-800">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
@@ -559,6 +641,16 @@ function DashboardComponent() {
                   <div className="flex flex-col gap-1">
                     <span className="text-gray-400 text-[10px]">CURRENT ORDER ID:</span>
                     <span className="text-indigo-400 font-bold">{activeOrderId}</span>
+                    <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-800">
+                      <span className="text-[10px] text-gray-400">Attempts on this order: <strong className="text-amber-300">{retryAttemptCount}/3</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveOrderId(null); setRetryAttemptCount(0); }}
+                        className="text-[10px] text-gray-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset / New Order
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <span className="text-gray-500 italic">Click inject above to generate a mock order and test the loop.</span>

@@ -27,7 +27,9 @@ router.get('/', async (_req: Request, res: Response) => {
     // Map each escalation to a specialized human officer based on error type
     const enriched = escalations.map((action) => {
       const lastWebhook = action.invoice?.webhooks?.[0];
-      const errorCode = lastWebhook?.error_code || 'MANUAL_INTERVENTION';
+      const errorCode = (lastWebhook?.error_code || 'MANUAL_INTERVENTION').toLowerCase();
+      const reasoning = action.ai_reasoning || '';
+      const isMaxRetriesExhausted = reasoning.includes('Hard stopping rule') || reasoning.includes('Max retries') || action.invoice?.status === 'HALTED';
 
       let assignedOfficer = {
         name: 'Pooja Sharma',
@@ -39,7 +41,17 @@ router.get('/', async (_req: Request, res: Response) => {
         recommendedAction: 'Contact customer finance team for mandate renewal / alternative card.',
       };
 
-      if (errorCode.includes('fraud') || errorCode.includes('risk')) {
+      if (isMaxRetriesExhausted) {
+        assignedOfficer = {
+          name: 'Pooja Sharma',
+          role: 'Key Account Manager (Enterprise Billing)',
+          department: 'Customer Success & Tier-2 Support',
+          email: 'pooja.sharma@merchant-ops.com',
+          avatar: 'PS',
+          slaHours: '2h SLA',
+          recommendedAction: 'Hard cap exceeded (3 retries failed). Reach out directly to customer for manual reconciliation and mandate reset.',
+        };
+      } else if (errorCode.includes('fraud') || errorCode.includes('risk')) {
         assignedOfficer = {
           name: 'Vikramaditya Rao',
           role: 'Senior Risk & Compliance Officer',

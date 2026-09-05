@@ -43,10 +43,11 @@ export async function simulateFailure(req: Request, res: Response) {
       error_description = 'Payment failed due to insufficient funds',
       amount_paise = 499900,
       user_phone = '+919999999999',
+      order_id,
     } = req.body;
 
     const timestamp = Math.floor(Date.now() / 1000);
-    const orderId = `order_sim_${Date.now()}`;
+    const orderId = (order_id && String(order_id).trim().length > 0) ? String(order_id).trim() : `order_sim_${Date.now()}`;
     const paymentId = `pay_sim_${Date.now()}`;
 
     // Format phone number to clean string
