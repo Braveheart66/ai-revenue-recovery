@@ -7,7 +7,7 @@ export interface AiEvaluationResult {
 
 /**
  * Autonomous AI Router: Evaluates payment failure contexts (error code, description, and transaction amount)
- * to decide whether to trigger a silent queue retry, initiate WhatsApp negotiation, call, or escalate.
+ * to decide whether to trigger a silent queue retry, initiate WhatsApp negotiation, voice call, or escalate to human.
  */
 export async function evaluateFailure(
   errorCode: string,
@@ -18,7 +18,7 @@ export async function evaluateFailure(
   const normalizedDesc = (errorDescription || '').toLowerCase();
   const amountRupees = (amountPaise / 100).toFixed(2);
 
-  // If GEMINI_API_KEY is present in environment, we can optionally query Google GenAI
+  // If GEMINI_API_KEY is present in environment, query Google GenAI
   const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (geminiApiKey) {
@@ -31,9 +31,9 @@ Analyze this failed transaction and decide the optimal recovery strategy.
 
 Allowed strategies:
 - SILENT_RETRY (for soft gateway timeouts, network blips, bank downtime)
-- WHATSAPP_NEGOTIATION (for hard failures like insufficient_balance, card_limit_exceeded, card_expired where customer interaction can resolve with UPI/alternate payment)
+- WHATSAPP_NEGOTIATION (for hard failures like insufficient_balance, card_limit_exceeded where customer interaction can resolve with UPI/alternate payment)
 - VOICE_CALL (for high value transactions > ₹10,000 with repeated or urgent failures)
-- ESCALATE_TO_HUMAN (for fraud, suspicious activity, account blocked)
+- ESCALATE_TO_HUMAN (for non-retriable card expiration, expired instrument, fraud, suspicious activity, account blocked)
 
 Return JSON with format: {"strategy": "<AiStrategy>", "reasoning": "<concise explanation>"}`;
 
@@ -67,7 +67,20 @@ Return JSON with format: {"strategy": "<AiStrategy>", "reasoning": "<concise exp
     }
   }
 
-  // Autonomous contextual rule & diagnostic engine fallback
+  // Explicit Card Expiration Rule -> Immediate ESCALATE_TO_HUMAN
+  if (
+    normalizedCode.includes('expired') ||
+    normalizedCode.includes('card_expired') ||
+    normalizedDesc.includes('expired') ||
+    normalizedDesc.includes('validity')
+  ) {
+    return {
+      strategy: AiStrategy.ESCALATE_TO_HUMAN,
+      reasoning: `Card validity expired (${errorDescription || errorCode}). Instrument cannot be recovered autonomously. Halting retries and escalating directly to Human Account Manager for mandate renewal.`,
+    };
+  }
+
+  // Soft network/gateway glitch rule -> SILENT_RETRY
   if (
     normalizedCode.includes('timeout') ||
     normalizedCode.includes('gateway') ||
@@ -82,13 +95,12 @@ Return JSON with format: {"strategy": "<AiStrategy>", "reasoning": "<concise exp
     };
   }
 
+  // Balance or Limit issues -> WHATSAPP_NEGOTIATION
   if (
     normalizedCode.includes('insufficient') ||
     normalizedCode.includes('limit') ||
-    normalizedCode.includes('expired') ||
     normalizedDesc.includes('insufficient balance') ||
-    normalizedDesc.includes('limit') ||
-    normalizedDesc.includes('expired')
+    normalizedDesc.includes('limit')
   ) {
     return {
       strategy: AiStrategy.WHATSAPP_NEGOTIATION,
@@ -96,14 +108,15 @@ Return JSON with format: {"strategy": "<AiStrategy>", "reasoning": "<concise exp
     };
   }
 
+  // High-ticket rule (> ₹10,000) -> VOICE_CALL
   if (amountPaise > 1000000) {
-    // > ₹10,000
     return {
       strategy: AiStrategy.VOICE_CALL,
       reasoning: `High-ticket transaction failure (₹${amountRupees}). Prioritizing voice call outreach for immediate settlement assurance.`,
     };
   }
 
+  // Fraud or blocked accounts -> ESCALATE_TO_HUMAN
   if (normalizedCode.includes('fraud') || normalizedCode.includes('blocked')) {
     return {
       strategy: AiStrategy.ESCALATE_TO_HUMAN,
@@ -111,7 +124,7 @@ Return JSON with format: {"strategy": "<AiStrategy>", "reasoning": "<concise exp
     };
   }
 
-  // Default fallback for user-level payment failures
+  // Default fallback -> WHATSAPP_NEGOTIATION
   return {
     strategy: AiStrategy.WHATSAPP_NEGOTIATION,
     reasoning: `Card/payment authorization failed (${errorCode}). Engaging user on WhatsApp with contextual alternative payment options.`,
