@@ -4,6 +4,7 @@ import { config } from './config';
 import { razorpayWebhookHandler } from './webhooks/razorpay';
 import metricsRouter from './routes/metrics.route';
 import simulatorRouter from './routes/simulator.route';
+import escalationsRouter from './routes/escalations.route';
 
 const app = express();
 
@@ -34,6 +35,9 @@ app.use('/api/metrics', metricsRouter);
 // Simulation API Route
 app.use('/api/simulate', simulatorRouter);
 
+// Human Escalation Desk API Route
+app.use('/api/escalations', escalationsRouter);
+
 // Health Check Endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -54,6 +58,7 @@ app.get('/', (_req: Request, res: Response) => {
       metrics: 'GET /api/metrics',
       simulateFailure: 'POST /api/simulate/failure',
       simulatePayment: 'POST /api/simulate/payment',
+      escalations: 'GET /api/escalations',
       razorpayWebhook: 'POST /webhooks/razorpay',
     },
   });
@@ -67,6 +72,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`[Recovery Engine API] Health Check at http://localhost:${PORT}/health`);
     console.log(`[Recovery Engine API] Recovery Metrics at http://localhost:${PORT}/api/metrics`);
     console.log(`[Recovery Engine API] Simulation API at http://localhost:${PORT}/api/simulate`);
+    console.log(`[Recovery Engine API] Escalations Desk at http://localhost:${PORT}/api/escalations`);
     console.log(`[Recovery Engine API] Razorpay Webhook listening at http://localhost:${PORT}/webhooks/razorpay (Raw Buffer)`);
   });
 }

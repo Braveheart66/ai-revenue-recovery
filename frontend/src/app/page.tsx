@@ -1,5 +1,6 @@
 "use client";
 
+import { EscalationModal } from "./EscalationModal";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -146,6 +147,7 @@ function DashboardComponent() {
   const [isInjecting, setIsInjecting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isEscalationModalOpen, setIsEscalationModalOpen] = useState(false);
 
   const currentScenario = FAILURE_SCENARIOS[selectedScenarioIndex];
 
@@ -289,7 +291,8 @@ function DashboardComponent() {
           <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
           <span>Booting AI Recovery Engine...</span>
         </div>
-      </main>
+        <EscalationModal isOpen={isEscalationModalOpen} onClose={() => setIsEscalationModalOpen(false)} onResolved={() => { fetchMetrics(); }} />
+    </main>
     );
   }
 
@@ -377,9 +380,9 @@ function DashboardComponent() {
           escalationCount > 0 
             ? "bg-rose-950/30 border-rose-500/40 ring-1 ring-rose-500/30" 
             : "bg-gray-900/90 border-gray-800"
-        }`} suppressHydrationWarning>
+        }`} onClick={() => setIsEscalationModalOpen(true)} suppressHydrationWarning>
           <div className="flex justify-between items-start">
-            <h3 className="text-gray-400 text-sm font-medium mb-1">Human Escalations</h3>
+            <h3 className="text-gray-400 text-sm font-medium mb-1">Human Escalations</h3><span className="text-[10px] font-mono text-rose-300 underline block cursor-pointer">Open Desk &rarr;</span>
             <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
               escalationCount > 0 ? "bg-rose-500/20 text-rose-300 border border-rose-500/40" : "bg-gray-800 text-gray-500"
             }`}>
