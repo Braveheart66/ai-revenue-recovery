@@ -3,10 +3,18 @@ import cors from 'cors';
 import { config } from './config';
 import { razorpayWebhookHandler } from './webhooks/razorpay';
 import metricsRouter from './routes/metrics.route';
+import simulatorRouter from './routes/simulator.route';
 
 const app = express();
 
-app.use(cors());
+// Configure CORS to allow requests from frontend dashboard and local tools
+app.use(
+  cors({
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-razorpay-signature'],
+  })
+);
 
 // CRITICAL: Mount the Razorpay webhook route with express.raw() BEFORE global express.json()
 // This preserves the exact untouched byte buffer for HMAC SHA256 signature verification.
@@ -22,6 +30,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Metrics API Route
 app.use('/api/metrics', metricsRouter);
+
+// Simulation API Route
+app.use('/api/simulate', simulatorRouter);
 
 // Health Check Endpoint
 app.get('/health', (_req: Request, res: Response) => {
@@ -41,6 +52,8 @@ app.get('/', (_req: Request, res: Response) => {
     endpoints: {
       health: 'GET /health',
       metrics: 'GET /api/metrics',
+      simulateFailure: 'POST /api/simulate/failure',
+      simulatePayment: 'POST /api/simulate/payment',
       razorpayWebhook: 'POST /webhooks/razorpay',
     },
   });
@@ -53,6 +66,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`[Recovery Engine API] Server running on port ${PORT}`);
     console.log(`[Recovery Engine API] Health Check at http://localhost:${PORT}/health`);
     console.log(`[Recovery Engine API] Recovery Metrics at http://localhost:${PORT}/api/metrics`);
+    console.log(`[Recovery Engine API] Simulation API at http://localhost:${PORT}/api/simulate`);
     console.log(`[Recovery Engine API] Razorpay Webhook listening at http://localhost:${PORT}/webhooks/razorpay (Raw Buffer)`);
   });
 }
